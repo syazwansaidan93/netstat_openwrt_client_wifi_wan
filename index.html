@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Network Statistics</title>
+    <!--
+        All CSS is defined here. This avoids external CDN links as requested.
+        The design is dark-themed, modern, and responsive.
+    -->
+    <style>
+        /* General body and typography styles */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+        }
+
+        /* Main container for the entire page content */
+        .container {
+            max-width: 1000px;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Header styling */
+        h1 {
+            text-align: center;
+            color: #4a90e2;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+            text-shadow: 0 0 10px rgba(74, 144, 226, 0.5);
+        }
+
+        /* Styling for cards/sections */
+        .card {
+            background-color: #2a2a2a;
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
+            border: 1px solid #3c3c3c;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 25px rgba(74, 144, 226, 0.15);
+        }
+
+        /* Section titles */
+        h2 {
+            margin-top: 0;
+            color: #ffffff;
+            border-bottom: 2px solid #4a90e2;
+            padding-bottom: 10px;
+            font-size: 1.8em;
+            text-shadow: 0 0 5px rgba(255, 255, 255, 0.1);
+        }
+
+        /* WAN statistics display */
+        .wan-stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            text-align: center;
+        }
+
+        .wan-stat-item {
+            background-color: #383838;
+            padding: 20px;
+            border-radius: 8px;
+        }
+
+        .wan-stat-item .label {
+            font-size: 0.9em;
+            color: #b0b0b0;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .wan-stat-item .value {
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #f5f5f5;
+        }
+
+        /* Client statistics table */
+        .client-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        .client-table th, .client-table td {
+            text-align: left;
+            padding: 15px;
+            border-bottom: 1px solid #3c3c3c;
+        }
+
+        .client-table th {
+            background-color: #4a90e2;
+            color: #ffffff;
+            font-weight: normal;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .client-table tr:nth-child(even) {
+            background-color: #2e2e2e;
+        }
+
+        .client-table tr:hover {
+            background-color: #383838;
+        }
+        
+        /* Loading message and error handling styles */
+        .message-box {
+            text-align: center;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-style: italic;
+            color: #e0e0e0;
+        }
+
+        /* Responsive adjustments for mobile view */
+        @media (max-width: 768px) {
+            body {
+                padding: 10px; /* Reduced padding for more screen space */
+            }
+            .container {
+                gap: 15px; /* Tighter gap between sections */
+            }
+            h1 {
+                font-size: 1.8em; /* Smaller header on mobile */
+            }
+            h2 {
+                font-size: 1.5em; /* Smaller section headers */
+            }
+            .card {
+                padding: 15px; /* Reduced padding on cards */
+            }
+            .wan-stats-grid {
+                grid-template-columns: 1fr; /* Ensures stats stack vertically */
+            }
+            .wan-stat-item {
+                padding: 15px; /* Tighter padding in stat items */
+            }
+            .wan-stat-item .value {
+                font-size: 1.2em; /* Smaller font for stat values */
+            }
+            .client-table {
+                font-size: 0.8em; /* Smaller font for table content */
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h1>Network Traffic Monitor</h1>
+
+        <!-- WAN Statistics Section -->
+        <div class="card">
+            <h2>WAN Interface Statistics</h2>
+            <div id="wan-stats-container" class="wan-stats-grid">
+                <!-- WAN stats will be injected here by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Client Statistics Section -->
+        <div class="card">
+            <h2>Connected Clients</h2>
+            <div style="overflow-x: auto;">
+                <table id="client-stats-table" class="client-table">
+                    <thead>
+                        <tr>
+                            <th>Hostname / IP</th>
+                            <th>RX Bytes</th>
+                            <th>TX Bytes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Client stats will be injected here by JavaScript -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <div id="status-message" class="message-box" style="display: none;"></div>
+    </div>
+
+    <!--
+        All JavaScript is defined here. This avoids external CDN links.
+        It contains the JSON data and functions to dynamically render the content.
+    -->
+    <script>
+        // The API endpoint URL to fetch data from.
+        const API_URL = 'http://data.home/api.php?action=combined';
+
+        const statusMessageEl = document.getElementById('status-message');
+        const wanStatsContainer = document.getElementById('wan-stats-container');
+        const clientStatsTbody = document.querySelector('#client-stats-table tbody');
+
+        /**
+         * Shows a message in the status message box.
+         * @param {string} message - The message to display.
+         */
+        function showStatusMessage(message) {
+            statusMessageEl.textContent = message;
+            statusMessageEl.style.display = 'block';
+        }
+
+        /**
+         * Hides the status message box.
+         */
+        function hideStatusMessage() {
+            statusMessageEl.style.display = 'none';
+        }
+
+        /**
+         * Clears the rendered data from the containers.
+         */
+        function clearData() {
+            wanStatsContainer.innerHTML = '';
+            clientStatsTbody.innerHTML = '';
+        }
+
+        /**
+         * Converts a number of bytes into a human-readable string (e.g., 1024 -> 1 KB).
+         * @param {number} bytes - The number of bytes.
+         * @returns {string} The formatted string.
+         */
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+
+        /**
+         * Renders the WAN statistics into the designated HTML section.
+         * @param {object} wanStats - The WAN statistics object.
+         */
+        function renderWanStats(wanStats) {
+            const html = `
+                <div class="wan-stat-item">
+                    <span class="label">RX Bytes</span>
+                    <span class="value">${formatBytes(wanStats.rx_bytes)}</span>
+                </div>
+                <div class="wan-stat-item">
+                    <span class="label">TX Bytes</span>
+                    <span class="value">${formatBytes(wanStats.tx_bytes)}</span>
+                </div>
+                <div class="wan-stat-item">
+                    <span class="label">Last Updated</span>
+                    <span class="value">${wanStats.last_update}</span>
+                </div>
+            `;
+            wanStatsContainer.innerHTML = html;
+        }
+
+        /**
+         * Renders the client statistics into the designated HTML table.
+         * @param {Array<object>} clientStats - The array of client statistics objects.
+         */
+        function renderClientStats(clientStats) {
+            clientStatsTbody.innerHTML = '';
+            clientStats.forEach(client => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${client.hostname}</td>
+                    <td>${formatBytes(client.rx_bytes)}</td>
+                    <td>${formatBytes(client.tx_bytes)}</td>
+                `;
+                clientStatsTbody.appendChild(row);
+            });
+        }
+
+        /**
+         * Main function to fetch data and render the UI.
+         */
+        async function fetchAndRenderData() {
+            clearData();
+            showStatusMessage('Loading data from API...');
+
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const dataToRender = await response.json();
+                hideStatusMessage();
+                
+                renderWanStats(dataToRender.wan_stats);
+                renderClientStats(dataToRender.client_stats);
+                
+                console.log("Successfully fetched and rendered data from API.");
+            } catch (error) {
+                showStatusMessage('Failed to load data from API. Please check the network connection and API endpoint.');
+                console.error('Fetch error:', error);
+            }
+        }
+
+        // Run the main function when the page has loaded
+        document.addEventListener('DOMContentLoaded', fetchAndRenderData);
+    </script>
+
+</body>
+</html>
