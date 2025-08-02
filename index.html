@@ -218,8 +218,8 @@
                     <thead>
                         <tr>
                             <th>Hostname / IP</th>
-                            <th>RX Bytes</th>
-                            <th>TX Bytes</th>
+                            <th>Download</th>
+                            <th>Upload</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -289,11 +289,11 @@
         function renderWanStats(wanStats) {
             const html = `
                 <div class="wan-stat-item">
-                    <span class="label">RX Bytes</span>
+                    <span class="label">Download</span>
                     <span class="value">${formatBytes(wanStats.rx_bytes)}</span>
                 </div>
                 <div class="wan-stat-item">
-                    <span class="label">TX Bytes</span>
+                    <span class="label">Upload</span>
                     <span class="value">${formatBytes(wanStats.tx_bytes)}</span>
                 </div>
                 <div class="wan-stat-item">
@@ -315,8 +315,8 @@
                 // The data-label attributes are crucial for the mobile card-like display
                 row.innerHTML = `
                     <td data-label="Hostname / IP">${client.hostname}</td>
-                    <td data-label="RX Bytes">${formatBytes(client.rx_bytes)}</td>
-                    <td data-label="TX Bytes">${formatBytes(client.tx_bytes)}</td>
+                    <td data-label="Download">${formatBytes(client.rx_bytes)}</td>
+                    <td data-label="Upload">${formatBytes(client.tx_bytes)}</td>
                 `;
                 clientStatsTbody.appendChild(row);
             });
