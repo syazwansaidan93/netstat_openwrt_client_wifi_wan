@@ -20,6 +20,7 @@
             justify-content: center;
             align-items: flex-start;
             min-height: 100vh;
+            line-height: 1.6;
         }
 
         /* Main container for the entire page content */
@@ -92,7 +93,7 @@
             color: #f5f5f5;
         }
 
-        /* Client statistics table */
+        /* Client statistics table styling for desktop */
         .client-table {
             width: 100%;
             border-collapse: collapse;
@@ -131,35 +132,67 @@
             font-style: italic;
             color: #e0e0e0;
         }
-
-        /* Responsive adjustments for mobile view */
+        
+        /*
+            Responsive adjustments for mobile view (768px and smaller).
+            This is the core of the mobile-friendly design.
+        */
         @media (max-width: 768px) {
             body {
-                padding: 10px; /* Reduced padding for more screen space */
+                padding: 10px;
             }
             .container {
-                gap: 15px; /* Tighter gap between sections */
+                gap: 15px;
             }
             h1 {
-                font-size: 1.8em; /* Smaller header on mobile */
+                font-size: 1.8em;
             }
             h2 {
-                font-size: 1.5em; /* Smaller section headers */
+                font-size: 1.5em;
             }
             .card {
-                padding: 15px; /* Reduced padding on cards */
+                padding: 15px;
             }
             .wan-stats-grid {
-                grid-template-columns: 1fr; /* Ensures stats stack vertically */
+                grid-template-columns: 1fr; /* Ensures WAN stats stack vertically */
             }
             .wan-stat-item {
-                padding: 15px; /* Tighter padding in stat items */
+                padding: 15px;
             }
             .wan-stat-item .value {
-                font-size: 1.2em; /* Smaller font for stat values */
+                font-size: 1.2em;
             }
-            .client-table {
-                font-size: 0.8em; /* Smaller font for table content */
+
+            /* Mobile-specific table styling - transforms into cards */
+            .client-table thead {
+                /* Hide the table headers on mobile */
+                display: none;
+            }
+
+            .client-table tr {
+                display: block;
+                margin-bottom: 15px;
+                border: 1px solid #3c3c3c;
+                border-radius: 8px;
+                padding: 10px;
+                background-color: #2e2e2e;
+            }
+            
+            .client-table td {
+                display: block;
+                text-align: right; /* Align values to the right */
+                border: none;
+                padding: 5px 0;
+                position: relative;
+                font-size: 0.9em;
+            }
+
+            /* Add data labels using pseudo-elements and data attributes */
+            .client-table td::before {
+                content: attr(data-label);
+                float: left;
+                font-weight: bold;
+                color: #b0b0b0;
             }
         }
     </style>
@@ -179,8 +212,8 @@
 
         <!-- Client Statistics Section -->
         <div class="card">
-            <h2>Connected Clients</h2>
-            <div style="overflow-x: auto;">
+            <h2 id="clients-header">Connected Clients</h2>
+            <div id="client-table-container">
                 <table id="client-stats-table" class="client-table">
                     <thead>
                         <tr>
@@ -209,6 +242,7 @@
         const statusMessageEl = document.getElementById('status-message');
         const wanStatsContainer = document.getElementById('wan-stats-container');
         const clientStatsTbody = document.querySelector('#client-stats-table tbody');
+        const clientsHeaderEl = document.getElementById('clients-header');
 
         /**
          * Shows a message in the status message box.
@@ -232,6 +266,7 @@
         function clearData() {
             wanStatsContainer.innerHTML = '';
             clientStatsTbody.innerHTML = '';
+            clientsHeaderEl.textContent = 'Connected Clients';
         }
 
         /**
@@ -270,20 +305,24 @@
         }
 
         /**
-         * Renders the client statistics into the designated HTML table.
+         * Renders the client statistics into the designated HTML table and updates the client count.
          * @param {Array<object>} clientStats - The array of client statistics objects.
          */
         function renderClientStats(clientStats) {
             clientStatsTbody.innerHTML = '';
             clientStats.forEach(client => {
                 const row = document.createElement('tr');
+                // The data-label attributes are crucial for the mobile card-like display
                 row.innerHTML = `
-                    <td>${client.hostname}</td>
-                    <td>${formatBytes(client.rx_bytes)}</td>
-                    <td>${formatBytes(client.tx_bytes)}</td>
+                    <td data-label="Hostname / IP">${client.hostname}</td>
+                    <td data-label="RX Bytes">${formatBytes(client.rx_bytes)}</td>
+                    <td data-label="TX Bytes">${formatBytes(client.tx_bytes)}</td>
                 `;
                 clientStatsTbody.appendChild(row);
             });
+            
+            // Update the total client count within the heading
+            clientsHeaderEl.innerHTML = `Connected Clients <span style="font-size: 0.8em; color: #b0b0b0;">(${clientStats.length})</span>`;
         }
 
         /**
