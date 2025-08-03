@@ -14,9 +14,7 @@ ROUTERS = {
         "dhcp_leases": "http://192.168.1.1/cgi-bin/dhcp.cgi"
     },
     "192.168.1.2": {
-        "ap_stats": "http://192.168.1.2/cgi-bin/totalwifi.cgi",
-        "wan_stats": None,
-        "dhcp_leases": None  # Removed DHCP collection from the AP
+        "ap_stats": "http://192.168.1.2/cgi-bin/totalwifi.cgi"
     }
 }
 
@@ -83,22 +81,28 @@ def setup_dhcp_db(conn):
 
 def reset_monthly_stats(conn):
     """
-    Resets the monthly stats if the current month is different from the
-    last update month. This is more robust than checking for the first day.
+    Resets the monthly stats at the beginning of a new month.
+    This checks if the last update was in a different month or year
+    to ensure a robust reset.
     """
     cursor = conn.cursor()
     try:
-        cursor.execute("SELECT timestamp FROM monthly_stats ORDER BY timestamp DESC LIMIT 1")
-        last_update_row = cursor.fetchone()
-
-        if last_update_row:
-            last_update_month = datetime.datetime.strptime(last_update_row['timestamp'], '%Y-%m-%d %H:%M:%S').month
-            current_month = datetime.datetime.now().month
+        # Check if the monthly table is empty. If so, there's nothing to reset.
+        cursor.execute("SELECT id FROM monthly_stats LIMIT 1")
+        if not cursor.fetchone():
+            return
             
-            if last_update_month != current_month:
-                print("New month detected. Resetting monthly stats.")
-                cursor.execute("UPDATE monthly_stats SET rx_bytes = 0, tx_bytes = 0")
+        last_update_row = cursor.execute("SELECT timestamp FROM monthly_stats ORDER BY timestamp DESC LIMIT 1").fetchone()
+        
+        if last_update_row:
+            last_update_date = datetime.datetime.strptime(last_update_row['timestamp'], '%Y-%m-%d %H:%M:%S').date()
+            current_date = datetime.date.today()
+            
+            if last_update_date.month != current_date.month or last_update_date.year != current_date.year:
+                cursor.execute("UPDATE monthly_stats SET rx_bytes = 0, tx_bytes = 0, timestamp = ?",
+                               (current_date.strftime('%Y-%m-%d %H:%M:%S'),))
                 conn.commit()
+
     except sqlite3.Error as e:
         print(f"Error during monthly stats reset: {e}")
 
@@ -115,6 +119,9 @@ def fetch_data(url):
         response = requests.get(url, timeout=10)
         response.raise_for_status()
         return response.text
+    except requests.exceptions.HTTPError as e:
+        print(f"HTTP Error fetching data from {url}: {e.response.status_code} - {e.response.reason}")
+        return None
     except requests.exceptions.RequestException as e:
         print(f"Error fetching data from {url}: {e}")
         return None
@@ -132,12 +139,16 @@ def parse_wifi_stats(data):
     for line in lines:
         parts = line.split()
         if len(parts) == 3:
-            mac_address, rx_bytes, tx_bytes = parts
-            clients.append({
-                "mac_address": mac_address.lower(),
-                "rx_bytes": int(rx_bytes),
-                "tx_bytes": int(tx_bytes)
-            })
+            try:
+                mac_address, rx_bytes, tx_bytes = parts
+                clients.append({
+                    "mac_address": mac_address.lower(),
+                    "rx_bytes": int(rx_bytes),
+                    "tx_bytes": int(tx_bytes)
+                })
+            except (ValueError, IndexError) as e:
+                print(f"Error parsing WiFi stats line: '{line}' - {e}")
+                continue
     return clients
 
 def parse_wan_stats(data):
@@ -147,15 +158,20 @@ def parse_wan_stats(data):
     """
     if not data:
         return None
-        
+    
     match = re.search(r"wan:\s+(\d+)\s+(\d+)", data)
     if match:
-        rx_bytes = int(match.group(1))
-        tx_bytes = int(match.group(2))
-        return {
-            "rx_bytes": rx_bytes,
-            "tx_bytes": tx_bytes
-        }
+        try:
+            rx_bytes = int(match.group(1))
+            tx_bytes = int(match.group(2))
+            return {
+                "rx_bytes": rx_bytes,
+                "tx_bytes": tx_bytes
+            }
+        except (ValueError, IndexError) as e:
+            print(f"Error parsing WAN stats from data: '{data}' - {e}")
+            return None
+    
     return None
 
 def parse_dhcp_leases(data):
@@ -173,20 +189,24 @@ def parse_dhcp_leases(data):
         r'(\d+)\s+([0-9a-fA-F:]{17})\s+([\d\.]+)\s+(.*?)\s+([\d0-9a-fA-F:]+)'
     )
     for line in lines:
-        match = ipv4_lease_pattern.match(line)
-        if match:
-            lease_end_time, mac_address, ip_address, hostname, client_id = match.groups()
-            
-            hostname = hostname.strip()
-            hostname = 'Unknown' if hostname == '*' else hostname.split()[0]
-            
-            leases.append({
-                "lease_end_time": int(lease_end_time),
-                "mac_address": mac_address.lower(),
-                "ip_address": ip_address,
-                "hostname": hostname,
-                "client_id": client_id
-            })
+        try:
+            match = ipv4_lease_pattern.match(line)
+            if match:
+                lease_end_time, mac_address, ip_address, hostname, client_id = match.groups()
+                
+                hostname = hostname.strip()
+                hostname = 'Unknown' if hostname == '*' else hostname.split()[0]
+                
+                leases.append({
+                    "lease_end_time": int(lease_end_time),
+                    "mac_address": mac_address.lower(),
+                    "ip_address": ip_address,
+                    "hostname": hostname,
+                    "client_id": client_id
+                })
+        except (ValueError, IndexError) as e:
+            print(f"Error parsing DHCP lease line: '{line}' - {e}")
+            continue
     return leases
 
 # --- Database Update Functions ---
@@ -225,6 +245,15 @@ def update_traffic_stats(conn, entity_id, new_rx, new_tx):
                     timestamp = ?
                 WHERE id = ?
             """, (incremental_rx, incremental_tx, timestamp, entity_id))
+        else:
+            # If no previous cumulative stats, this is the first run for this entity.
+            cursor.execute("""
+                UPDATE monthly_stats
+                SET rx_bytes = ?,
+                    tx_bytes = ?,
+                    timestamp = ?
+                WHERE id = ?
+            """, (new_rx, new_tx, datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'), entity_id))
         
         # Update the last known cumulative stats with the new values
         cursor.execute("""
@@ -233,6 +262,7 @@ def update_traffic_stats(conn, entity_id, new_rx, new_tx):
         """, (entity_id, new_rx, new_tx))
         
         conn.commit()
+
     except sqlite3.Error as e:
         print(f"Error updating traffic stats for {entity_id}: {e}")
 
@@ -278,8 +308,6 @@ def main():
         reset_monthly_stats(conn_stats)
 
         for router_ip, urls in ROUTERS.items():
-            print(f"Processing Router: {router_ip}")
-            
             ap_data = fetch_data(urls.get("ap_stats"))
             clients = parse_wifi_stats(ap_data)
             if clients:
@@ -298,7 +326,6 @@ def main():
 
         conn_stats.close()
         conn_dhcp.close()
-        print("All stats processed and stored.")
 
     except Exception as e:
         print(f"An unhandled error occurred: {e}")
