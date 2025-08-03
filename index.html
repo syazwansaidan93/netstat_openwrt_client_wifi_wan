@@ -311,8 +311,8 @@
                 // The data-label attributes are crucial for the mobile card-like display
                 row.innerHTML = `
                     <td data-label="Hostname / IP">${client.hostname}</td>
-                    <td data-label="Download">${formatBytes(client.rx_bytes)}</td>
-                    <td data-label="Upload">${formatBytes(client.tx_bytes)}</td>
+                    <td data-label="Upload">${formatBytes(client.rx_bytes)}</td>
+                    <td data-label="Download">${formatBytes(client.tx_bytes)}</td>
                 `;
                 clientStatsTbody.appendChild(row);
             });
