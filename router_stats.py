@@ -3,20 +3,20 @@ import requests
 import re
 import datetime
 import calendar
+import json
 
 # --- Configuration ---
-# Define the router IPs and the URLs for the stats pages.
-# Update these with the correct URLs for your OpenWrt devices.
-ROUTERS = {
-    "192.168.1.1": {
-        "ap_stats": "http://192.168.1.1/cgi-bin/totalwifi.cgi",
-        "wan_stats": "http://192.168.1.1/cgi-bin/wan.cgi",
-        "dhcp_leases": "http://192.168.1.1/cgi-bin/dhcp.cgi"
-    },
-    "192.168.1.2": {
-        "ap_stats": "http://192.168.1.2/cgi-bin/totalwifi.cgi"
-    }
-}
+def load_config(filename="routers.json"):
+    """Loads router configuration from a JSON file."""
+    try:
+        with open(filename, 'r') as f:
+            return json.load(f)
+    except FileNotFoundError:
+        print(f"Error: Configuration file '{filename}' not found.")
+        return None
+    except json.JSONDecodeError as e:
+        print(f"Error: Invalid JSON format in '{filename}': {e}")
+        return None
 
 # Separate database files for different data types
 STATS_DB_NAME = "network_stats.db"
@@ -295,6 +295,11 @@ def upsert_dhcp_leases(conn, leases_data):
 # --- Main Execution ---
 def main():
     """Main function to orchestrate the data collection and storage."""
+    
+    ROUTERS = load_config()
+    if not ROUTERS:
+        return
+
     try:
         conn_stats = connect_db(STATS_DB_NAME)
         conn_dhcp = connect_db(DHCP_DB_NAME)
