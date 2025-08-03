@@ -1,0 +1,10 @@
+{
+    "192.168.1.1": {
+        "ap_stats": "http://192.168.1.1/cgi-bin/totalwifi.cgi",
+        "wan_stats": "http://192.168.1.1/cgi-bin/wan.cgi",
+        "dhcp_leases": "http://192.168.1.1/cgi-bin/dhcp.cgi"
+    },
+    "192.168.1.2": {
+        "ap_stats": "http://192.168.1.2/cgi-bin/totalwifi.cgi"
+    }
+}
